@@ -436,7 +436,7 @@ class WebSocket(object):
         if not self._sent_close:
             # Only called to flush?
             if msg:
-                self._sendmsg(0x2, msg)
+                self._sendmsg(0x1, msg)
 
         self._flush()
         return len(msg)
@@ -571,6 +571,15 @@ class WebSocket(object):
                     msg = self._partial_msg
                     self._partial_msg = ''.decode("ascii")
                     return msg
+            elif frame["opcode"] == 0x1:
+                if self._partial_msg:
+                    self.shutdown(socket.SHUT_RDWR, 1002, "Procotol error: Unexpected new frame")
+                    continue
+
+                if frame["fin"]:
+                    return frame["payload"]
+                else:
+                    self._partial_msg = frame["payload"]
             elif frame["opcode"] == 0x2:
                 if self._partial_msg:
                     self.shutdown(socket.SHUT_RDWR, 1002, "Procotol error: Unexpected new frame")
