@@ -40,9 +40,6 @@ for mod, msg in [('ssl', 'TLS/SSL/wss is disabled'),
 if sys.platform == 'win32':
     # make sockets pickle-able/inheritable
     import multiprocessing.reduction
-    # the multiprocesssing module behaves much differently on Windows,
-    # and we have yet to fix all the bugs
-    sys.exit("Windows is not supported at this time")
 
 from websockify.websocket import WebSocket, WebSocketWantReadError, WebSocketWantWriteError
 from websockify.websocketserver import WebSocketRequestHandlerMixIn
@@ -102,7 +99,7 @@ class WebSockifyRequestHandler(WebSocketRequestHandlerMixIn, SimpleHTTPRequestHa
         SimpleHTTPRequestHandler.__init__(self, req, addr, server)
 
     def log_message(self, format, *args):
-        self.logger.info("%s - - [%s] %s" % (self.address_string(), self.log_date_time_string(), format % args))
+        self.logger.info("%s - - [%s] %s" % (self.client_address[0], self.log_date_time_string(), format % args))
 
     #
     # WebSocketRequestHandler logging/output functions
@@ -340,7 +337,7 @@ class WebSockifyServer(object):
 
     def __init__(self, RequestHandlerClass, listen_fd=None,
             listen_host='', listen_port=None, source_is_ipv6=False,
-            verbose=False, cert='', key='', ssl_only=None,
+            verbose=False, cert='', key='', key_password=None, ssl_only=None,
             verify_client=False, cafile=None,
             daemon=False, record='', web='', web_auth=False,
             file_only=False,
@@ -380,6 +377,7 @@ class WebSockifyServer(object):
 
         # keyfile path must be None if not specified
         self.key = None
+        self.key_password = key_password
 
         # Make paths settings absolute
         self.cert = os.path.abspath(cert)
@@ -577,7 +575,7 @@ class WebSockifyServer(object):
                     if self.ssl_ciphers is not None:
                         context.set_ciphers(self.ssl_ciphers)
                     context.options = self.ssl_options
-                    context.load_cert_chain(certfile=self.cert, keyfile=self.key)
+                    context.load_cert_chain(certfile=self.cert, keyfile=self.key, password=self.key_password)
                     if self.verify_client:
                         context.verify_mode = ssl.CERT_REQUIRED
                         if self.cafile:

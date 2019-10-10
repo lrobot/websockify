@@ -13,9 +13,9 @@ as taken from http://docs.python.org/dev/library/ssl.html#certificates
 
 import signal, socket, optparse, time, os, sys, subprocess, logging, errno, ssl
 try:
-    from socketserver import ForkingMixIn
+    from socketserver import ThreadingMixIn
 except ImportError:
-    from SocketServer import ForkingMixIn
+    from SocketServer import ThreadingMixIn
 
 try:
     from http.server import HTTPServer
@@ -112,11 +112,16 @@ Traffic Legend:
             msg += " (using SSL)"
         self.log_message(msg)
 
-        tsock = websockifyserver.WebSockifyServer.socket(self.server.target_host,
-                                                       self.server.target_port,
-                                                       connect=True,
-                                                       use_ssl=self.server.ssl_target,
-                                                       unix_socket=self.server.unix_target)
+        try:
+            tsock = websockifyserver.WebSockifyServer.socket(self.server.target_host,
+                                                           self.server.target_port,
+                                                           connect=True,
+                                                           use_ssl=self.server.ssl_target,
+                                                           unix_socket=self.server.unix_target)
+        except Exception:
+            self.log_message("Failed to connect to %s:%s",
+                             self.server.target_host, self.server.target_port)
+            raise self.CClose(1011, "Failed to connect to downstream server")
 
         self.request.setsockopt(socket.SOL_TCP, socket.TCP_NODELAY, 1)
         if not self.server.wrap_cmd and not self.server.unix_target:
@@ -473,6 +478,8 @@ def websockify_init():
             help="SSL certificate file")
     parser.add_option("--key", default=None,
             help="SSL key file (if separate from cert)")
+    parser.add_option("--key-password", default=None,
+            help="SSL key password")
     parser.add_option("--ssl-only", action="store_true",
             help="disallow non-encrypted client connections")
     parser.add_option("--ssl-target", action="store_true",
@@ -719,7 +726,7 @@ def websockify_init():
         server.start_server()
 
 
-class LibProxyServer(ForkingMixIn, HTTPServer):
+class LibProxyServer(ThreadingMixIn, HTTPServer):
     """
     Just like WebSocketProxy, but uses standard Python SocketServer
     framework.
@@ -768,7 +775,7 @@ class LibProxyServer(ForkingMixIn, HTTPServer):
     def process_request(self, request, client_address):
         """Override process_request to implement a counter"""
         self.handler_id += 1
-        ForkingMixIn.process_request(self, request, client_address)
+        ThreadingMixIn.process_request(self, request, client_address)
 
 
 if __name__ == '__main__':
